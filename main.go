@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Task struct {
 	id           int
@@ -8,23 +10,19 @@ type Task struct {
 	cost         int
 	taskType     string
 	taskCallback func(input ...any) error
+	status       string
 }
 
-type Callback struct {
-	callbackTaskId int
-	callbackFunc   func(input ...any) error
-}
+func execute(task *Task) {
 
-func execute(task Task, notifiers ...chan int) {
+	task.status = "pending"
+
 	fmt.Printf("executing %s task %d\n", task.taskType, task.id)
 
 	for i := task.cost; i > 0; i-- {
 	}
 
-	if task.taskType == "async" && notifiers != nil && len(notifiers) > 0 {
-		notifiers[0] <- 1
-		close(notifiers[0])
-	}
+	task.status = "completed"
 
 }
 
@@ -34,7 +32,7 @@ func main() {
 		{
 			id:       1,
 			name:     "task1",
-			cost:     10,
+			cost:     100000000,
 			taskType: "async",
 			taskCallback: func(input ...any) error {
 				fmt.Println("hello from task 1 callback")
@@ -47,36 +45,43 @@ func main() {
 			cost:     10,
 			taskType: "sync",
 		},
+		{
+			id:       3,
+			name:     "task3",
+			cost:     10,
+			taskType: "async",
+			taskCallback: func(input ...any) error {
+				fmt.Println("hello from task 3 callback")
+				return nil
+			},
+		},
 	}
 
-	callbackQueue := []Callback{}
-	notifiers := make([]chan int, 0)
+	scheduledTasks := []*Task{}
 
 	for _, task := range tasks {
 		if task.taskType == "async" {
-			callbackQueue = append(callbackQueue, Callback{
-				callbackTaskId: task.id,
-				callbackFunc:   task.taskCallback,
-			})
-			notifier := make(chan int)
-			notifiers = append(notifiers, notifier)
-			go execute(task, notifier)
+			scheduledTasks = append(scheduledTasks, &task)
+			go execute(&task)
 		} else {
-
-			execute(task)
+			execute(&task)
 		}
 	}
 
-	for _, notifier := range notifiers {
-		completedTaskid := <-notifier
-		var callback Callback
-		for _, cb := range callbackQueue {
-			if cb.callbackTaskId == completedTaskid {
-				callback = cb
-				break
-			}
+	for {
+		taskTop := scheduledTasks[0]
+		scheduledTasks = scheduledTasks[1:]
+
+		if taskTop.status == "completed" {
+			taskTop.taskCallback()
+		} else {
+			scheduledTasks = append(scheduledTasks, taskTop)
 		}
-		callback.callbackFunc()
+
+		if len(scheduledTasks) == 0 {
+			break
+		}
+
 	}
 
 }
